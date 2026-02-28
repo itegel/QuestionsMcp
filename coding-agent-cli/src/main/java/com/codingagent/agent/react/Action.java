@@ -1,0 +1,34 @@
+package com.codingagent.agent.react;
+
+import java.util.Map;
+
+public class Action {
+    private String toolName;
+    private Map<String, Object> parameters;
+
+    public Action(String toolName, Map<String, Object> parameters) {
+        this.toolName = toolName;
+        this.parameters = parameters;
+    }
+
+    public String getToolName() {
+        return toolName;
+    }
+
+    public void setToolName(String toolName) {
+        this.toolName = toolName;
+    }
+
+    public Map<String, Object> getParameters() {
+        return parameters;
+    }
+
+    public void setParameters(Map<String, Object> parameters) {
+        this.parameters = parameters;
+    }
+
+    @Override
+    public String toString() {
+        return "Action{tool='" + toolName + "', params=" + parameters + "}";
+    }
+}
