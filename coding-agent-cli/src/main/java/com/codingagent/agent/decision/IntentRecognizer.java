@@ -126,22 +126,39 @@ public class IntentRecognizer {
 
     private Intent parseIntent(String response, String userInput) {
         try {
-            Map<String, Object> json = parseJson(response);
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String jsonStr = response.trim();
+            if (jsonStr.startsWith("```json")) {
+                jsonStr = jsonStr.substring(7);
+            }
+            if (jsonStr.endsWith("```")) {
+                jsonStr = jsonStr.substring(0, jsonStr.length() - 3);
+            }
+            jsonStr = jsonStr.trim();
+
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(jsonStr);
             
-            String intentStr = (String) json.get("intent");
+            String intentStr = root.path("intent").asText("CHAT");
             IntentType intentType = parseIntentType(intentStr);
             
-            @SuppressWarnings("unchecked")
-            Map<String, Object> parameters = (Map<String, Object>) json.get("parameters");
-            if (parameters == null) {
-                parameters = new HashMap<>();
+            Map<String, Object> parameters = new HashMap<>();
+            com.fasterxml.jackson.databind.JsonNode paramsNode = root.path("parameters");
+            if (paramsNode.isObject()) {
+                paramsNode.fields().forEachRemaining(entry -> {
+                    parameters.put(entry.getKey(), entry.getValue().asText());
+                });
             }
             
-            String confidence = (String) json.get("confidence");
-            String reasoning = (String) json.get("reasoning");
+            String confidence = root.path("confidence").asText("低");
+            String reasoning = root.path("reasoning").asText("");
             
             if (!parameters.containsKey("description")) {
                 parameters.put("description", userInput);
+            }
+            
+            // 如果意图识别显示需要多个步骤，或者置信度高且包含多个子需求，可以标记为需要协调
+            if (reasoning.contains("多步") || reasoning.contains("复杂") || reasoning.toLowerCase().contains("multiple steps")) {
+                parameters.put("complex", "true");
             }
             
             return new Intent(intentType, parameters, confidence, reasoning);
@@ -152,114 +169,37 @@ public class IntentRecognizer {
                 "解析失败：" + e.getMessage());
         }
     }
-
-    private IntentType parseIntentType(String intentStr) {
-        if (intentStr == null) {
-            return IntentType.CHAT;
-        }
-        
-        String upper = intentStr.toUpperCase();
-        for (IntentType type : IntentType.values()) {
-            if (type.name().equals(upper) || type.getName().equals(intentStr)) {
-                return type;
-            }
-        }
-        
-        if (upper.contains("分析") || upper.contains("ANALYZE")) {
-            return IntentType.ANALYZE;
-        } else if (upper.contains("生成") || upper.contains("CREATE") || upper.contains("GENERATE")) {
-            return IntentType.GENERATE;
-        } else if (upper.contains("审查") || upper.contains("REVIEW")) {
-            return IntentType.REVIEW;
-        } else if (upper.contains("重构") || upper.contains("REFACTOR")) {
-            return IntentType.REFACTOR;
-        } else if (upper.contains("调试") || upper.contains("DEBUG")) {
-            return IntentType.DEBUG;
-        } else if (upper.contains("解释") || upper.contains("EXPLAIN")) {
-            return IntentType.EXPLAIN;
-        } else if (upper.contains("测试") || upper.contains("TEST")) {
-            return IntentType.TEST;
-        } else if (upper.contains("搜索") || upper.contains("SEARCH")) {
-            return IntentType.SEARCH;
-        }
-        
+private IntentType parseIntentType(String intentStr) {
+    if (intentStr == null) {
         return IntentType.CHAT;
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String jsonStr) {
-        jsonStr = jsonStr.trim();
-        if (jsonStr.startsWith("```json")) {
-            jsonStr = jsonStr.substring(7);
+    String upper = intentStr.toUpperCase();
+    for (IntentType type : IntentType.values()) {
+        if (type.name().equals(upper) || type.getName().equals(intentStr)) {
+            return type;
         }
-        if (jsonStr.endsWith("```")) {
-            jsonStr = jsonStr.substring(0, jsonStr.length() - 3);
-        }
-        jsonStr = jsonStr.trim();
-        
-        return parseJsonMap(jsonStr);
     }
 
-    private Map<String, Object> parseJsonMap(String jsonStr) {
-        Map<String, Object> result = new HashMap<>();
-        
-        int braceCount = 0;
-        boolean inString = false;
-        boolean escape = false;
-        
-        for (char c : jsonStr.toCharArray()) {
-            if (escape) {
-                escape = false;
-                continue;
-            }
-            if (c == '\\') {
-                escape = true;
-                continue;
-            }
-            if (c == '"') {
-                inString = !inString;
-                continue;
-            }
-            if (!inString) {
-                if (c == '{') braceCount++;
-                if (c == '}') braceCount--;
-            }
-        }
-        
-        if (braceCount != 0) {
-            for (int i = 0; i < Math.max(0, braceCount); i++) {
-                jsonStr += "}";
-            }
-        }
-        
-        jsonStr = jsonStr.replaceAll("[\\n\\r]", " ").replaceAll("\\s+", " ");
-        
-        int start = jsonStr.indexOf('{');
-        int end = jsonStr.lastIndexOf('}');
-        
-        if (start == -1 || end == -1) {
-            return result;
-        }
-        
-        String content = jsonStr.substring(start + 1, end).trim();
-        
-        String[] pairs = content.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
-        for (String pair : pairs) {
-            String[] keyValue = pair.split(":", 2);
-            if (keyValue.length == 2) {
-                String key = keyValue[0].trim().replaceAll("\"", "");
-                String value = keyValue[1].trim();
-                
-                if (value.startsWith("{")) {
-                    result.put(key, parseJsonMap(value));
-                } else if (value.startsWith("\"") && value.endsWith("\"")) {
-                    result.put(key, value.substring(1, value.length() - 1));
-                } else {
-                    result.put(key, value);
-                }
-            }
-        }
-        
-        return result;
+    if (upper.contains("分析") || upper.contains("ANALYZE")) {
+        return IntentType.ANALYZE;
+    } else if (upper.contains("生成") || upper.contains("CREATE") || upper.contains("GENERATE")) {
+        return IntentType.GENERATE;
+    } else if (upper.contains("审查") || upper.contains("REVIEW")) {
+        return IntentType.REVIEW;
+    } else if (upper.contains("重构") || upper.contains("REFACTOR")) {
+        return IntentType.REFACTOR;
+    } else if (upper.contains("调试") || upper.contains("DEBUG")) {
+        return IntentType.DEBUG;
+    } else if (upper.contains("解释") || upper.contains("EXPLAIN")) {
+        return IntentType.EXPLAIN;
+    } else if (upper.contains("测试") || upper.contains("TEST")) {
+        return IntentType.TEST;
+    } else if (upper.contains("搜索") || upper.contains("SEARCH")) {
+        return IntentType.SEARCH;
     }
+
+    return IntentType.CHAT;
 }
+}
+

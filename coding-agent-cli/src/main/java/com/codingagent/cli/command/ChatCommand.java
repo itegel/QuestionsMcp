@@ -8,7 +8,13 @@ import com.codingagent.memory.MemoryService;
 import com.codingagent.tool.ToolManager;
 import picocli.CommandLine;
 
-import java.util.Scanner;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.impl.completer.StringsCompleter;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+
+import java.io.IOException;
 
 @CommandLine.Command(name = "chat", description = "与智能编码助手对话")
 public class ChatCommand implements Runnable {
@@ -25,7 +31,6 @@ public class ChatCommand implements Runnable {
         AgentRouter agentRouter = new AgentRouter(toolManager);
         com.codingagent.agent.collaboration.MultiAgentCoordinator coordinator = 
             new com.codingagent.agent.collaboration.MultiAgentCoordinator(toolManager);
-        Scanner scanner = new Scanner(System.in);
 
         System.out.println("╔════════════════════════════════════════════╗");
         System.out.println("║     智能编码助手 - Intelligent Coding Agent    ║");
@@ -35,77 +40,91 @@ public class ChatCommand implements Runnable {
         System.out.println("╚════════════════════════════════════════════╝");
         System.out.println();
 
-        while (true) {
-            System.out.print("👤 你：");
-            String input = scanner.nextLine();
+        try {
+            Terminal terminal = TerminalBuilder.builder()
+                    .system(true)
+                    .build();
 
-            if (input.equalsIgnoreCase("exit") || input.equalsIgnoreCase("quit")) {
-                break;
-            }
+            LineReader lineReader = LineReaderBuilder.builder()
+                    .terminal(terminal)
+                    .completer(new StringsCompleter("help", "tools", "agents", "collaborate", "exit", "quit"))
+                    .build();
 
-            if (input.equalsIgnoreCase("help")) {
-                showHelp();
-                continue;
-            }
-
-            if (input.equalsIgnoreCase("tools")) {
-                showTools(toolManager);
-                continue;
-            }
-
-            if (input.equalsIgnoreCase("agents")) {
-                coordinator.showAgentStatus();
-                continue;
-            }
-
-            if (input.equalsIgnoreCase("collaborate")) {
-                System.out.println("🔄 启用多 Agent 协作模式");
-                String response = coordinator.coordinate(sessionId, input);
-                System.out.println("\n🤖 助手：" + response);
-                System.out.println("═══════════════════════════════════════════\n");
-                continue;
-            }
-
-            try {
-                Intent intent = intentRecognizer.recognize(input);
-                
-                System.out.println("\n🤖 意图识别:");
-                System.out.println("   类型：" + intent.getType().getName());
-                System.out.println("   置信度：" + intent.getConfidence());
-                System.out.println("   理由：" + intent.getReasoning());
-                System.out.println();
-
-                if (intent.getConfidence().equals("低")) {
-                    System.out.println("⚠️  我不太确定你的意图，能否详细说明？");
-                    System.out.println("或者我可以使用智能推理模式来处理这个任务。\n");
+            while (true) {
+                String input;
+                try {
+                    input = lineReader.readLine("👤 你：");
+                } catch (org.jline.reader.UserInterruptException | org.jline.reader.EndOfFileException e) {
+                    break;
                 }
 
-                com.codingagent.agent.base.BaseAgent agent = agentRouter.selectAgent(intent);
+                if (input == null || input.trim().isEmpty()) {
+                    continue;
+                }
                 
-                System.out.println("🤖 已选择 " + agent.getName() + " 来处理你的请求");
-                System.out.println();
+                input = input.trim();
 
-                String response;
-                if (agent instanceof com.codingagent.agent.react.ReActAgent) {
-                    System.out.println("🔄 启动智能推理模式 (ReAct)...");
-                    response = agent.process(sessionId, input);
-                } else {
-                    response = agent.process(sessionId, input);
+                if (input.equalsIgnoreCase("exit") || input.equalsIgnoreCase("quit")) {
+                    break;
                 }
 
-                System.out.println("\n🤖 助手：" + response);
-                System.out.println("═══════════════════════════════════════════\n");
+                if (input.equalsIgnoreCase("help")) {
+                    showHelp();
+                    continue;
+                }
 
-            } catch (Exception e) {
-                System.out.println("❌ 处理请求时出错：" + (e.getMessage() != null ? e.getMessage() : e.getClass().getName()));
-                System.out.println("错误类型：" + e.getClass().getName());
-                System.out.println("\n详细堆栈跟踪:");
-                e.printStackTrace(System.out);
-                System.out.println("\n请重试或详细描述你的需求。\n");
+                if (input.equalsIgnoreCase("tools")) {
+                    showTools(toolManager);
+                    continue;
+                }
+
+                if (input.equalsIgnoreCase("agents")) {
+                    coordinator.showAgentStatus();
+                    continue;
+                }
+
+                try {
+                    Intent intent = intentRecognizer.recognize(input);
+                    
+                    System.out.println("\n🤖 意图识别:");
+                    System.out.println("   类型：" + intent.getType().getName());
+                    System.out.println("   置信度：" + intent.getConfidence());
+                    System.out.println("   理由：" + intent.getReasoning());
+                    System.out.println();
+
+                    String response;
+                    // 自动判断是否需要协作：显式请求、识别为复杂任务、或置信度低但任务描述长
+                    boolean shouldCollaborate = input.toLowerCase().contains("collaborate") || 
+                                               "true".equals(intent.getParameters().get("complex")) ||
+                                               (intent.getConfidence().equals("低") && input.length() > 50);
+
+                    if (shouldCollaborate) {
+                        System.out.println("🔄 检测到复杂任务，启动多 Agent 协作模式...");
+                        response = coordinator.coordinate(sessionId, input);
+                    } else {
+                        com.codingagent.agent.base.BaseAgent agent = agentRouter.selectAgent(intent);
+                        System.out.println("🤖 已选择 " + agent.getName() + " 来处理你的请求");
+                        
+                        if (agent instanceof com.codingagent.agent.react.ReActAgent) {
+                            System.out.println("🔄 启动智能推理模式 (ReAct)...");
+                        }
+                        response = agent.process(sessionId, input);
+                    }
+
+                    System.out.println("\n🤖 助手：" + response);
+                    System.out.println("═══════════════════════════════════════════\n");
+
+                } catch (Exception e) {
+                    System.out.println("❌ 处理请求时出错：" + (e.getMessage() != null ? e.getMessage() : e.getClass().getName()));
+                    System.out.println("错误类型：" + e.getClass().getName());
+                    System.out.println("\n详细堆栈跟踪:");
+                    e.printStackTrace(System.out);
+                    System.out.println("\n请重试或详细描述你的需求。\n");
+                }
             }
+        } catch (IOException e) {
+            System.err.println("❌ 初始化终端失败：" + e.getMessage());
         }
-
-        scanner.close();
     }
 
     private void showHelp() {
@@ -122,7 +141,7 @@ public class ChatCommand implements Runnable {
         System.out.println("  - 重构这个模块，提高代码质量");
         System.out.println("  - 查找并修复这个 bug");
         System.out.println("\n高级模式:");
-        System.out.println("  - collaborate: 自动分解任务并协调多个 Agent 完成");
+        System.out.println("  - 自动触发: 复杂的任务描述会自动触发多 Agent 协作");
         System.out.println("  - agents: 查看当前可用的所有 Agent 及其能力");
         System.out.println();
     }

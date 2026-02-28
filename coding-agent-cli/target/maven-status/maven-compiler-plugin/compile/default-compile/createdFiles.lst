@@ -18,6 +18,7 @@ com/codingagent/agent/collaboration/TaskPlan.class
 com/codingagent/util/QwenResponse$Choice.class
 com/codingagent/util/QwenResponse$Usage.class
 com/codingagent/agent/reflect/ReflectionHistory.class
+com/codingagent/agent/react/ThoughtParser$1.class
 com/codingagent/agent/collaboration/Subtask.class
 com/codingagent/memory/MemoryService.class
 com/codingagent/util/QwenClient.class

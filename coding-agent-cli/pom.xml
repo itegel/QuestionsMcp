@@ -39,6 +39,13 @@
             <version>${jackson.version}</version>
         </dependency>
 
+        <!-- JLine 交互式终端 -->
+        <dependency>
+            <groupId>org.jline</groupId>
+            <artifactId>jline</artifactId>
+            <version>3.23.0</version>
+        </dependency>
+
         <!-- 测试依赖 -->
         <dependency>
             <groupId>junit</groupId>

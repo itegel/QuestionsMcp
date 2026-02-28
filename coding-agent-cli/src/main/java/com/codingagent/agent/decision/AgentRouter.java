@@ -5,6 +5,7 @@ import com.codingagent.agent.code.CodeAnalyzerAgent;
 import com.codingagent.agent.code.CodeGeneratorAgent;
 import com.codingagent.agent.code.CodeReviewerAgent;
 import com.codingagent.agent.react.ReActAgent;
+import com.codingagent.agent.reflect.SelfReflectingAgent;
 import com.codingagent.tool.ToolManager;
 
 import java.util.HashMap;
@@ -14,15 +15,18 @@ public class AgentRouter {
 
     private final Map<String, BaseAgent> agents;
     private final ReActAgent reactAgent;
+    private final SelfReflectingAgent reflectingAgent;
 
     public AgentRouter(ToolManager toolManager) {
         this.agents = new HashMap<>();
         this.reactAgent = new ReActAgent(toolManager);
+        this.reflectingAgent = new SelfReflectingAgent(toolManager);
         
         registerAgent("analyzer", new CodeAnalyzerAgent());
         registerAgent("generator", new CodeGeneratorAgent());
         registerAgent("reviewer", new CodeReviewerAgent());
         registerAgent("react", reactAgent);
+        registerAgent("reflecting", reflectingAgent);
     }
 
     public void registerAgent(String name, BaseAgent agent) {
@@ -30,6 +34,26 @@ public class AgentRouter {
     }
 
     public BaseAgent selectAgent(IntentRecognizer.Intent intent) {
+        String userInput = (String) intent.getParameters().get("description");
+        if (userInput != null) {
+            String lowerInput = userInput.toLowerCase();
+            if (lowerInput.contains("reflect agent") || lowerInput.contains("reflecting agent") || lowerInput.contains("自我反思") || lowerInput.contains("反思 agent")) {
+                return reflectingAgent;
+            }
+            if (lowerInput.contains("react agent") || lowerInput.contains("推理 agent")) {
+                return reactAgent;
+            }
+            if (lowerInput.contains("analyzer agent") || lowerInput.contains("分析 agent")) {
+                return agents.get("analyzer");
+            }
+            if (lowerInput.contains("generator agent") || lowerInput.contains("生成 agent")) {
+                return agents.get("generator");
+            }
+            if (lowerInput.contains("reviewer agent") || lowerInput.contains("审查 agent")) {
+                return agents.get("reviewer");
+            }
+        }
+
         switch (intent.getType()) {
             case ANALYZE:
             case EXPLAIN:
@@ -39,10 +63,10 @@ public class AgentRouter {
                 return agents.get("generator");
             
             case REVIEW:
-                return agents.get("reviewer");
-            
             case REFACTOR:
             case DEBUG:
+                return reflectingAgent;
+            
             case TEST:
             case SEARCH:
                 return reactAgent;

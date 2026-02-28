@@ -33,8 +33,13 @@ public class CodeAnalyzerAgent extends BaseAgent {
             }
             System.out.println("✅ 文件读取成功，共 " + codeContent.length() + " 字符");
         } else {
-            System.out.println("⚠️  未能从请求中提取文件路径");
-            return "⚠️  请提供完整的文件路径，例如：\n\"帮我分析 src/main/java/com/codingagent/tool/ToolManager.java\"";
+            List<QwenRequest.Message> existingMessages = memoryService.getMessages(sessionId);
+            if (existingMessages != null && !existingMessages.isEmpty()) {
+                System.out.println("⚠️  未能从请求中提取文件路径，将基于历史对话上下文进行分析。");
+            } else {
+                System.out.println("⚠️  未能从请求中提取文件路径，且无历史对话");
+                return "⚠️  请提供完整的文件路径，例如：\n\"帮我分析 src/main/java/com/codingagent/tool/ToolManager.java\"";
+            }
         }
         
         String prompt = buildAnalysisPrompt(task, codeContent);

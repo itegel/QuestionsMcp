@@ -13,7 +13,7 @@ public class FileTool implements Tool {
     private final String basePath;
 
     public FileTool() {
-        this.basePath = ConfigLoader.getProperty("tool.file.base-path", "./workspace");
+        this.basePath = ConfigLoader.getProperty("tool.file.base-path", ".");
     }
 
     @Override
@@ -63,6 +63,50 @@ public class FileTool implements Tool {
             }
         } catch (Exception e) {
             return "Error: " + e.getMessage();
+        }
+    }
+
+    @Override
+    public java.util.Map<String, Object> executeWithMap(java.util.Map<String, Object> parameters) {
+        String operation = (String) parameters.getOrDefault("operation", parameters.get("action"));
+        if (operation == null) {
+            return java.util.Collections.singletonMap("error", "Missing operation parameter");
+        }
+        
+        String pathStr = (String) parameters.get("path");
+        if (pathStr == null) {
+            return java.util.Collections.singletonMap("error", "Missing path parameter");
+        }
+        
+        Path fullPath;
+        if (pathStr.startsWith("/") || pathStr.matches("^[a-zA-Z]:\\\\.*")) {
+            fullPath = Paths.get(pathStr);
+        } else {
+            fullPath = Paths.get(basePath, pathStr);
+        }
+
+        try {
+            String result;
+            switch (operation) {
+                case "read":
+                    result = readFile(fullPath);
+                    break;
+                case "write":
+                    String content = (String) parameters.get("content");
+                    if (content == null) {
+                        return java.util.Collections.singletonMap("error", "Missing content parameter for write operation");
+                    }
+                    result = writeFile(fullPath, content);
+                    break;
+                case "list":
+                    result = listFiles(fullPath);
+                    break;
+                default:
+                    return java.util.Collections.singletonMap("error", "Unknown operation: " + operation);
+            }
+            return java.util.Collections.singletonMap("result", result);
+        } catch (Exception e) {
+            return java.util.Collections.singletonMap("error", "Error: " + e.getMessage());
         }
     }
 

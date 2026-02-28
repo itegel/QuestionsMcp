@@ -110,16 +110,22 @@ public class ThoughtParser {
             return parameters;
         }
         
-        if (paramsStr.startsWith("{") && paramsStr.endsWith("}")) {
-            paramsStr = paramsStr.substring(1, paramsStr.length() - 1).trim();
+        String trimmed = paramsStr.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                return mapper.readValue(trimmed, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>(){});
+            } catch (Exception e) {
+                trimmed = trimmed.substring(1, trimmed.length() - 1).trim();
+            }
         }
         
-        // 尝试用逗号或空格分割
+        // 尝试用逗号或空格分割 (仅当不是合法JSON时才作为回退)
         String[] pairs;
-        if (paramsStr.contains(",")) {
-            pairs = paramsStr.split(",");
+        if (trimmed.contains(",")) {
+            pairs = trimmed.split(",");
         } else {
-            pairs = paramsStr.split("\\s+");
+            pairs = trimmed.split("\\s+");
         }
         
         for (String pair : pairs) {

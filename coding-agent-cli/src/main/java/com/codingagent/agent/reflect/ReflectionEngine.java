@@ -76,92 +76,41 @@ public class ReflectionEngine {
         ReflectionResult result = new ReflectionResult();
         
         try {
-            String json = extractJson(output);
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String jsonStr = output.trim();
+            int start = jsonStr.indexOf("{");
+            int end = jsonStr.lastIndexOf("}");
+            if (start != -1 && end != -1 && end > start) {
+                jsonStr = jsonStr.substring(start, end + 1);
+            }
             
-            result.setQualityScore(extractNumber(json, "\"quality_score\""));
-            result.setStrengths(extractArray(json, "\"strengths\""));
-            result.setWeaknesses(extractArray(json, "\"weaknesses\""));
-            result.setImprovements(extractArray(json, "\"improvements\""));
-            result.setLessonsLearned(extractString(json, "\"lessons_learned\""));
-            result.setShouldRetry(extractBoolean(json, "\"should_retry\""));
-            result.setRetryStrategy(extractString(json, "\"retry_strategy\""));
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(jsonStr);
+            
+            result.setQualityScore(root.path("quality_score").asInt(5));
+            
+            List<String> strengths = new ArrayList<>();
+            root.path("strengths").forEach(node -> strengths.add(node.asText()));
+            result.setStrengths(strengths);
+            
+            List<String> weaknesses = new ArrayList<>();
+            root.path("weaknesses").forEach(node -> weaknesses.add(node.asText()));
+            result.setWeaknesses(weaknesses);
+            
+            List<String> improvements = new ArrayList<>();
+            root.path("improvements").forEach(node -> improvements.add(node.asText()));
+            result.setImprovements(improvements);
+            
+            result.setLessonsLearned(root.path("lessons_learned").asText(""));
+            result.setShouldRetry(root.path("should_retry").asBoolean(false));
+            result.setRetryStrategy(root.path("retry_strategy").asText(""));
             
         } catch (Exception e) {
-            System.out.println("⚠️  解析反思结果失败，使用默认值");
+            System.out.println("⚠️  解析反思结果失败，使用默认值：" + e.getMessage());
             result.setQualityScore(5);
             result.addImprovement("未能解析详细的改进建议");
         }
         
         return result;
-    }
-
-    private String extractJson(String text) {
-        int start = text.indexOf("{");
-        int end = text.lastIndexOf("}");
-        if (start != -1 && end != -1 && end > start) {
-            return text.substring(start, end + 1);
-        }
-        return text;
-    }
-
-    private int extractNumber(String json, String key) {
-        try {
-            String pattern = "\"" + key + "\"\\s*:\\s*(\\d+)";
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-            java.util.regex.Matcher m = p.matcher(json);
-            if (m.find()) {
-                return Integer.parseInt(m.group(1));
-            }
-        } catch (Exception e) {
-        }
-        return 5;
-    }
-
-    private boolean extractBoolean(String json, String key) {
-        try {
-            String pattern = "\"" + key + "\"\\s*:\\s*(true|false)";
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-            java.util.regex.Matcher m = p.matcher(json);
-            if (m.find()) {
-                return Boolean.parseBoolean(m.group(1));
-            }
-        } catch (Exception e) {
-        }
-        return false;
-    }
-
-    private String extractString(String json, String key) {
-        try {
-            String pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-            java.util.regex.Matcher m = p.matcher(json);
-            if (m.find()) {
-                return m.group(1);
-            }
-        } catch (Exception e) {
-        }
-        return "";
-    }
-
-    private java.util.List<String> extractArray(String json, String key) {
-        java.util.List<String> list = new ArrayList<>();
-        try {
-            String pattern = "\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]";
-            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-            java.util.regex.Matcher m = p.matcher(json);
-            if (m.find()) {
-                String arrayContent = m.group(1);
-                String[] items = arrayContent.split("\",\"");
-                for (String item : items) {
-                    String cleaned = item.trim().replace("\"", "");
-                    if (!cleaned.isEmpty()) {
-                        list.add(cleaned);
-                    }
-                }
-            }
-        } catch (Exception e) {
-        }
-        return list;
     }
 
     public void saveReflection(String taskId, ReflectionResult reflection) {

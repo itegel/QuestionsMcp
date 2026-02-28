@@ -50,7 +50,16 @@ public class SearchTool implements Tool {
         String pathStr = (String) parameters.getOrDefault("path", ".");
         String pattern = (String) parameters.get("pattern");
         String extension = (String) parameters.get("extension");
-        int maxResults = (Integer) parameters.getOrDefault("maxResults", 50);
+        
+        int maxResults = 50;
+        Object maxResultsObj = parameters.get("maxResults");
+        if (maxResultsObj instanceof Number) {
+            maxResults = ((Number) maxResultsObj).intValue();
+        } else if (maxResultsObj instanceof String) {
+            try {
+                maxResults = Integer.parseInt((String) maxResultsObj);
+            } catch (NumberFormatException ignored) {}
+        }
 
         Path basePath = Paths.get(pathStr);
         if (!Files.exists(basePath)) {
